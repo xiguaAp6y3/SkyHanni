@@ -66,6 +66,9 @@ class GuiConfig {
     @FeatureToggle
     var timeFormat24h: Boolean = false
 
+    // Language is now automatically detected from Minecraft settings
+    // Use /shlang command to check current language status
+
     @Expose
     @ConfigOption(name = "Discord Rich Presence", desc = "")
     @Accordion
