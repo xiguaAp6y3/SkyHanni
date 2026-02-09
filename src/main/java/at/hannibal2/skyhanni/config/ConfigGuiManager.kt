@@ -6,6 +6,7 @@ import at.hannibal2.skyhanni.events.ConfigLoadEvent
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.utils.ConditionalUtils
 import at.hannibal2.skyhanni.utils.ConfigUtils
+import at.hannibal2.skyhanni.utils.i18n.LanguageManager
 import io.github.notenoughupdates.moulconfig.gui.MoulConfigEditor
 
 @SkyHanniModule
@@ -26,6 +27,7 @@ object ConfigGuiManager {
     fun getEditorInstance() = editor ?: MoulConfigEditor(SkyHanniMod.configManager.processor).also { editor = it }
 
     fun openConfigGui(search: String? = null) {
+        LanguageManager.syncOnConfigOpen()
         val editor = getEditorInstance()
 
         if (search != null) {
