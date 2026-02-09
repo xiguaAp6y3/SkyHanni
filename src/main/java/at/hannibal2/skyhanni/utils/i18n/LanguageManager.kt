@@ -4,7 +4,6 @@ import at.hannibal2.skyhanni.api.event.HandleEvent
 import at.hannibal2.skyhanni.SkyHanniMod
 import at.hannibal2.skyhanni.config.commands.CommandCategory
 import at.hannibal2.skyhanni.config.commands.CommandRegistrationEvent
-import at.hannibal2.skyhanni.events.SecondPassedEvent
 import at.hannibal2.skyhanni.events.utils.PreInitFinishedEvent
 import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
 import at.hannibal2.skyhanni.test.command.ErrorManager
@@ -36,12 +35,13 @@ object LanguageManager {
 
     /**
      * Initialize the language manager.
-     * Loads the fallback (English) translations and current language translations.
+     * Loads saved language from config first for instant translations,
+     * then syncs with Minecraft's current language setting.
      */
     @HandleEvent
     fun onPreInit(event: PreInitFinishedEvent) {
         loadFallbackTranslations()
-        detectAndLoadLanguage()
+        loadSavedLanguage()
         initialized = true
         logger.log("Language manager initialized with language: ${currentLanguage.code}")
     }
@@ -52,7 +52,31 @@ object LanguageManager {
     fun getCurrentLanguage(): Language = currentLanguage
 
     /**
+     * Load language from saved config for instant startup translations.
+     * Falls back to detecting from Minecraft if no saved value.
+     */
+    private fun loadSavedLanguage() {
+        val saved = SkyHanniMod.feature.gui.savedLanguageCode
+        if (saved.isNotEmpty()) {
+            currentLanguage = Language.fromCode(saved)
+            lastMcLanguage = saved
+            loadTranslationsForCurrentLanguage()
+            logger.log("Loaded saved language from config: ${currentLanguage.code}")
+        } else {
+            detectAndLoadLanguage()
+        }
+    }
+
+    /**
+     * Save the current language code to config for persistence.
+     */
+    private fun saveLanguageToConfig() {
+        SkyHanniMod.feature.gui.savedLanguageCode = currentLanguage.code
+    }
+
+    /**
      * Detect language from Minecraft settings and load translations.
+     * Saves the result to config for next startup.
      * @return true if language changed, false otherwise.
      */
     fun detectAndLoadLanguage(): Boolean {
@@ -62,22 +86,19 @@ object LanguageManager {
         lastMcLanguage = mcLanguage
         currentLanguage = Language.fromMinecraftCode(mcLanguage)
         loadTranslationsForCurrentLanguage()
+        saveLanguageToConfig()
         logger.log("Language detected from MC settings: $mcLanguage -> ${currentLanguage.code}")
         return true
     }
 
     /**
-     * Periodically check if Minecraft's language setting changed.
-     * Automatically syncs translations when a change is detected.
+     * Called when the config GUI is about to open.
+     * Syncs language with Minecraft settings and refreshes the GUI if needed.
      */
-    @HandleEvent
-    fun onSecondPassed(event: SecondPassedEvent) {
+    fun syncOnConfigOpen() {
         if (!initialized) return
-        if (event.repeatSeconds(5)) {
-            if (detectAndLoadLanguage()) {
-                refreshConfigGui()
-                ChatUtils.chat("§a[SkyHanni] Language synced to ${currentLanguage.nativeName}")
-            }
+        if (detectAndLoadLanguage()) {
+            refreshConfigGui()
         }
     }
 
