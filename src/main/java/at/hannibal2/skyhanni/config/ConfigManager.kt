@@ -288,6 +288,82 @@ enum class ConfigFileType(val fileName: String, val clazz: Class<*>, val propert
 }
 
 class BlockingMoulConfigProcessor : MoulConfigProcessor<SkyHanniConfig>(SkyHanniMod.feature) {
+
+    /**
+     * Tracks the category field name hierarchy for constructing translation keys.
+     * Top-level categories use "config.category.{fieldName}",
+     * sub-categories use "config.{parentFieldName}.{fieldName}".
+     */
+    private val categoryStack = ArrayDeque<String>()
+
+    override fun beginCategory(baseObject: Any, field: Field, name: String, description: String) {
+        val fieldName = field.name
+        val nameKey: String
+        val descKey: String
+
+        if (categoryStack.isEmpty()) {
+            nameKey = "config.category.$fieldName"
+            descKey = "config.category.$fieldName.desc"
+        } else {
+            val parentFieldName = categoryStack.last()
+            nameKey = "config.$parentFieldName.$fieldName"
+            descKey = "config.$parentFieldName.$fieldName.desc"
+        }
+
+        categoryStack.addLast(fieldName)
+
+        val translatedName = translateOrFallback(nameKey, name)
+        val translatedDesc = translateOrFallback(descKey, description)
+        super.beginCategory(baseObject, field, translatedName, translatedDesc)
+    }
+
+    override fun endCategory() {
+        categoryStack.removeLastOrNull()
+        super.endCategory()
+    }
+
+    override fun createProcessedOption(baseObject: Any, field: Field, option: ConfigOption): ProcessedOptionImpl {
+        val result = super.createProcessedOption(baseObject, field, option)
+
+        val path = result.getPath()
+        val nameKey = "config.$path"
+        val descKey = "config.$path.desc"
+
+        val translatedName = translateOrFallback(nameKey, option.name)
+        val translatedDesc = translateOrFallback(descKey, option.desc)
+
+        if (translatedName != option.name) {
+            try {
+                val nameField = result.javaClass.getDeclaredField("name")
+                nameField.makeAccessible()
+                nameField.set(result, StructuredText.of(translatedName))
+            } catch (e: Exception) {
+                ErrorManager.logErrorWithData(
+                    e,
+                    "Failed to set translated name for config option",
+                    "path" to path,
+                    "nameKey" to nameKey,
+                )
+            }
+        }
+        if (translatedDesc != option.desc) {
+            try {
+                val descField = result.javaClass.getDeclaredField("desc")
+                descField.makeAccessible()
+                descField.set(result, StructuredText.of(translatedDesc))
+            } catch (e: Exception) {
+                ErrorManager.logErrorWithData(
+                    e,
+                    "Failed to set translated description for config option",
+                    "path" to path,
+                    "descKey" to descKey,
+                )
+            }
+        }
+
+        return result
+    }
+
     override fun createOptionGui(
         processedOption: ProcessedOption,
         field: Field,
